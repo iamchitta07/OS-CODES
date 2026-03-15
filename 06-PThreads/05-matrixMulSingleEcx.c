@@ -44,3 +44,9 @@ int main(int argc, char* const argv[]) {
     printf("Execution Time: [%.4f]s\n", totalSeconds);
     return EXIT_SUCCESS;
 }
+/*
+Enter Row of First Matrix: 1000
+Enter Col of First and Row of Second Matrix: 1000
+Enter Col of Second Matrix: 1000
+Execution Time: [3.2166]s
+*/
