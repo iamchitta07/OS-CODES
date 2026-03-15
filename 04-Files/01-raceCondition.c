@@ -24,10 +24,10 @@ int main(int argc, char* const argv[]) {
             fclose(f1);
         } else {
             //  writes updated balance to text file
+            x+=2;
             f1 = fopen("01-acc_bal.txt", "w+");
             fprintf(f1, "bal: %d", x);
             fclose(f1);
-            x+=2;
             exit(EXIT_SUCCESS);
         }
     } for(int i=0;i<500;i++)

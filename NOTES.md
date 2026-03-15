@@ -933,6 +933,35 @@ int main() {
     return 0;
 }
 ```
+## **POSIX Threads (pthreads)**
+1. Thread Creation & Termination
+
+    These are the most important pthread functions.
+    1. `pthread_create()`: Creates new thread.
+        ```c
+        #include "pthread.h"
+
+        int pthread_create(
+            pthread_t *thread,
+            const pthread_attr_t *attr,
+            void *(*start_routine)(void *),
+            void *arg
+        );
+        ```
+        **Parameters**
+
+        | Parameter | Meaning|
+        |-|-|
+        |`pthread_t *thread`| This is an "out" parameter. The function stores the unique ID of the newly created thread in this variable. You use this ID later to join or kill the thread. |
+        |`const pthread_attr_t *attr`| This allows you to set thread attributes (like stack size or scheduling priority). In 99% of cases, you pass `NULL` to use the default settings. |
+        |`void *(*start_routine) (void *)`| This is a **function pointer**. It is the name of the function you want the thread to run. This function must take a `void*` as an argument and return a `void*`. |
+        |`void *arg`| This is the argument passed to the `start_routine`. Since it is a `void*`, you can pass anything (an integer, a string, or a complex struct) by casting its address. |
+
+        **Return Values**
+        Unlike many C functions that return a result or a pointer, pthread_create returns an **integer status code**:
+            
+        * **0**: Success.
+        * **Non-zero**: Failure. The return value is the error number (e.g., `EAGAIN` if the system lacks resources to create another thread).
 
 ## Process Code and Tasks
 
