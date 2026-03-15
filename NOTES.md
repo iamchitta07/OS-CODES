@@ -616,6 +616,271 @@ int main() {
 }
 ```
 
+### **exec()**
+> In UNIX/Linux, the exec family of functions is used to replace the current process image with a new program. It is commonly used after fork() when a child process wants to execute another program.
+
+### What does `exec()` do?
+`exec` **does not create a new process**.
+
+Instead, it **replaces the current process with another program**.
+
+### Syntax
+All `exec` functions follow this pattern:
+```c
+#include "unistd.h"
+
+int execX(...);
+```
+Where X **determines how arguments are passed**.
+
+### Exec Family Functions
+The main functions are:
+1. `execl()`
+2. `execv()`
+3. `execlp()`
+4. `execvp()`
+5. `execle()`
+6. `execve()` (actual system call)<br/>
+***
+
+
+1. `execl()`:
+* Meaning: 
+    * **l = list** 
+
+    Arguments are passed as **a list**.
+
+    ### Syntax
+    ```c
+    int execl(const char *path, const char *arg0, ..., NULL);
+    ```
+* `path`: The full, absolute, or relative path to the executable (e.g., `"/bin/ls"`).
+* `arg0`: By convention, this is the name of the executable itself (usually the same as the file name).
+* `...`: A comma-separated list of arguments you want to pass to the program.
+* `NULL`: The argument list must be terminated with a `NULL` pointer (cast to `char *`) so the function knows where the arguments end.
+    ### Example:
+    ```c
+    #include "stdio.h"
+    #include "unistd.h"
+
+    int main() {
+        printf("About to run 'ls -l'...\n");
+
+        // Arguments: path, arg0, arg1, terminator
+        execl("/bin/ls", "ls", "-l", (char *)NULL);
+
+        // This line will ONLY execute if execl fails
+        perror("execl failed");
+        return 1;
+    }
+    ```
+
+2. `execv()`:
+* Meaning: 
+    * **v = vector (array)** 
+
+    Arguments are passed as **array**.
+
+    ### Syntax
+    ```c
+    int execv(const char *path, char *const argv[]);
+    ```
+* `path`: The full to the binary (e.g., `"/bin/ls"`).
+* `argv`: An array of pointers to strings.
+    * `argv[0]` should be the program name.
+    * The last element of the array must be `NULL`.
+
+    ### Example:
+    ```c
+    #include "stdio.h"
+    #include "unistd.h"
+
+    int main() {
+        // Define the "Vector" of arguments
+        char *args[] = {
+            "echo",      // argv[0]: The name of the command
+            "Hello",     // argv[1]
+            "World",     // argv[2]
+            NULL         // The mandatory NULL terminator
+        };
+
+        printf("Executing echo via execv...\n");
+
+        // Pass the path and the array
+        execv("/bin/echo", args);
+
+        // If we reach here, execv failed
+        perror("execv failed");
+        return 1;
+    }
+    ```
+
+3. `execlp()`:
+* Meaning: 
+    * **p = search PATH** 
+
+    The system searches the executable in the **PATH environment variable**.
+
+    ### Syntax
+    ```c
+    int execlp(const char *file, const char *arg0, ..., NULL);
+    ```
+* `file`: Just the filename (e.g., `"ls"`, `"gcc"`, `"python3"`).
+* `arg0`: The name of the program (usually the same as the file).
+* `...`: The list of arguments.
+*  `NULL`: Still mandatory to terminate the list.
+
+    ### Example:
+    ```c
+    #include "stdio.h"
+    #include "unistd.h"
+
+    int main() {
+        printf("Searching for 'error' in log.txt using execlp...\n");
+
+        // Notice we just say "grep", not "/bin/grep"
+        execlp("grep", "grep", "error", "log.txt", (char *)NULL);
+
+        // This only runs if the search fails (e.g., grep isn't installed)
+        perror("execlp failed");
+        return 1;
+    }
+    ```
+
+4. `execvp()`:
+* Meaning: 
+    * **v = vector** 
+    * **p = search PATH** 
+
+    Arguments passed as array and executable searched in **PATH**.
+
+    ### Syntax
+    ```c
+    int execvp(const char *file, char *const argv[]);
+    ```
+* `file`: The name of the program to run (e.g., `"gcc"`, `"ls"`, `"ping"`).
+* `argv`: The array of arguments. 
+    * Remember: `argv[0]` should be the program name.
+    * The final element must be `NULL`.
+
+    ### Example:
+    ```c
+    #include "stdio.h"
+    #include "unistd.h"
+
+    int main() {
+        // A dynamically defined array of arguments
+        char *args[] = {"ls", "-a", "-l", "/home", NULL};
+
+        printf("Running 'ls -a -l /home' using execvp...\n");
+
+        // No full path needed! It finds 'ls' in /bin/ automatically.
+        execvp("ls", args);
+
+        // If execvp returns, something went wrong
+        perror("execvp failed");
+        return 1;
+    }
+    ```
+
+5. `execle()`:
+* Meaning: 
+    * **e = Enviroment** 
+
+    Allows passing a **custom environment**.
+
+    ### Syntax
+    ```c
+    int execle(const char *path, const char *arg0, ..., NULL, char *envp[]);
+    ```
+* `path`: Full path to the executable (No `PATH` search here!).
+* `arg0` ... `argN`: The list of arguments.
+* `...`: A comma-separated list of arguments you want to pass to the program.
+* `NULL`: The argument list must be terminated with a `NULL` pointer (cast to `char *`) so the function knows where the arguments end.
+* `envp[]`: This is the array of environment variables (the "Environment Pointer").
+    * It must also be `NULL` terminated.
+    ### Example:
+    ```c
+    #include "stdio.h"
+    #include "unistd.h"
+
+    int main() {
+        // Define a custom environment
+        char *my_env[] = {
+            "USER=GuestUser",
+            "APP_MODE=Production",
+            "SECRET_KEY=12345",
+            NULL // The mandatory NULL for the environment array
+        };
+
+        printf("Launching a process with a custom environment...\n");
+
+        // Arguments: path, arg0, NULL-terminator, environment-array
+        execle("/usr/bin/env", "env", (char *)NULL, my_env);
+
+        // If we reach here, it failed
+        perror("execle failed");
+        return 1;
+    }
+    ```
+
+6. `execve()` (Real System Call):
+* All other exec functions internally call `execve()`.
+
+    ### Syntax
+    ```c
+    int execve(const char *path, char *const argv[], char *const envp[]);
+    ```
+* `path`: The full path to the binary. No `PATH` search happens here.
+* `argv[]`: An array of strings for arguments (ends with `NULL`).
+* `envp[]`: This is the array of environment variables (the "Environment Pointer").
+    * It must also be `NULL` terminated.
+    ### Example:
+    ```c
+    #include "stdio.h"
+    #include "unistd.h"
+
+    int main() {
+        // 1. The full path is required
+        char *binaryPath = "/usr/bin/python3";
+
+        // 2. The Argument Vector
+        char *args[] = {"python3", "--version", NULL};
+
+        // 3. The Environment Vector (completely custom)
+        char *env[] = {"PATH=/usr/bin:/bin", "USER=root", NULL};
+
+        printf("Handing control over to the Kernel via execve...\n");
+
+        // The actual system call
+        execve(binaryPath, args, env);
+
+        // If we reach this point, the system call failed
+        perror("execve");
+        return 1;
+    }
+    ```
+## Comparison Table for `exec` Family
+| Function | Argument Style | Search PATH? | Environment Source | Best For... |
+|-|-|-|-|-|
+| execl | List | No | Inherited | Simple, hardcoded commands. |
+| execv | Vector (Array) | No | Inherited| Commands with dynamic arguments. |
+| execlp | List | Yes | Inherited| Running standard system tools by name. |
+| execvp | Vector (Array) | Yes | Inherited| Most common: Shell-like behavior. |
+| execle | List | No | Custom| Running a process in a "clean" sandbox.
+| execve | Vector (Array) | No | Custom| The actual System Call; total control. |
+
+### Key Commonalities (The "Golden Rules")
+Regardless of which one you choose, they all share these traits:
+1. **Replacement, not creation**: They replace the current process. If you want to keep your original program running, you must call `fork()` first.
+2. **The `NULL` Terminator**: 
+    * In **List** versions (`l`), the last argument must be `(char *)NULL`.
+    * In **Vector** versions (`v`), the last element of the array must be `NULL`.
+3. **No Return on Success**: If the function works, the code following it is deleted from memory. If it returns `-1`, it failed (usually because the file wasn't found or permissions were denied).
+4. **PID Persistence**: The Process ID (`PID`) remains exactly the same before and after the call.
+
+
+
 ### **pause()**
  The `pause()` system call is the simplest way to make a process wait. It essentially puts a process into an "indefinite sleep" until it receives a signal. Unlike `sleep()`, which wakes up after a timer expires, `pause()` only wakes up when a signal is delivered.
 
