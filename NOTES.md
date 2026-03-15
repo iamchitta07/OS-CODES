@@ -133,8 +133,8 @@ int main() {
 
 Return Value: Returns the `PID` of the terminated child on success, or `-1` if there are no children to `wait` for.
 ```C
-#include <sys/wait.h>
-#include <sys/types.h>
+#include "sys/wait.h"
+#include "sys/types.h"
 
 pid_t childPID = wait(int *stat_loc);
 ```
@@ -155,7 +155,7 @@ pid_t childPID = wait(int *stat_loc);
 #include "unistd.h"
 #include "sys/wait.h"
 
-int main() {
+int main(int argc, char* const argv[]) {
     pid_t pid = fork();
 
     if (!pid) {
@@ -177,7 +177,7 @@ int main() {
         }
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 ```
 
@@ -301,6 +301,175 @@ int main() {
     return 0;
 }
 ```
+
+### **vfork()**
+> `vfork()` creates a child process similar to `fork()`, but it is designed to be more efficient when the child immediately calls `exec()`.
+
+### Syntax
+```c
+#include "unistd.h"
+#include "sys/types.c"
+
+pid_t vfork(void);
+```
+
+### **How `vfork()` Works**
+When `fork()` is called:
+1. A **child process is created**.
+2. The **child shares the same memory space** as the parent.
+3. The **parent process is suspended** until the child:
+    * calls `exec()` or
+    * calls `_exit()`.
+    ***
+So the child **does not get its own copy of memory**.
+
+### Return Values
+| Return Value | Meaning |
+| - | - |
+| 0 | Returned to child process |
+| Child PID | Returned to parent |
+| -1 | Error occurred |
+
+#### **Example:**
+```C
+#include "stdio.h"
+#include "unistd.h"
+#include "stdlib.h"
+#include "sys/types.h"
+
+int main(int argc, char *const argv[]) {
+    int x = 10;
+
+    pid_t pid = vfork();
+
+    if(pid == 0) {
+        x = 20;
+        printf("Child: x = %d\n", x);
+        _exit(0);
+    }
+    else {
+        printf("Parent: x = %d\n", x);
+    }
+
+    return EXIT_SUCCESS;
+}
+```
+### Possible Output
+```bash
+Child: x = 20
+Parent: x = 20
+```
+### Restrictions of `vfork()`:
+While using `vfork()`:
+* Child **must not**:
+    * modify variables
+    * return from the function
+    * call `exit()`
+* Child **should only**:
+    * call `exec()`
+    * call `_exit()`
+    ***
+Otherwise undefined behavior occurs.
+
+### **clone()**
+> `clone()` creates a child process but allows the programmer to decide which parts of the execution environment are shared.
+
+* These can include:
+    * Memory space
+    * File descriptors
+    * Signal handlers
+    * Filesystem information
+    * Thread group
+    ***
+So unlike `fork()` (which copies everything), `clone()` **allows fine-grained control**.
+
+### Syntax
+```c
+#define _GNU_SOURCE
+#include "sched.h"
+#include "sys/types.h"
+#include "unistd.h"
+
+int clone(int (*fn)(void *), void *child_stack, int flags, void *arg);
+```
+
+### Parameters Explained
+1. `fn`: Function executed by the child.
+    ```c
+    int child_function(void *arg);
+    ```
+    
+2. `child_stack`: Pointer to the **top of the stack for the child process**.
+    Unlike `fork()`, Linux **requires a manually allocated stack**.
+    ```c
+    #define STACK_SIZE 1024*1024
+    char stack[STACK_SIZE];
+    // pass
+    stack + STACK_SIZE
+    ```
+
+3. `flags`: This is the most **important parameter**. It determines **what the child shares with the parent**.
+Examples of Flags:<br/>
+    | Flag | Meaning |
+    |-|-|
+    | `CLONE_VM` | Share memory |
+    | `CLONE_FS` | Share filesystem info |
+    | `CLONE_FILES` | Share file descriptors |
+    | `CLONE_SIGHAND` | Share signal handlers |
+    | `CLONE_THREAD` | Same thread group |
+    | `CLONE_PARENT` | Same parent process |
+    | `CLONE_NEWNS` | New mount namespace |
+    | `CLONE_NEWUTS` | New hostname domain |
+    Flags are combined using **bitwise** `OR`.
+
+    Example 
+    ```c
+    int flags = CLONE_VM | CLONE_FILES;
+    ```
+4. `args`: Argument passed to the child function.
+### Example:
+```c
+#define _GNU_SOURCE
+#include "sched.h"
+#include "stdio.h"
+#include "stdlib.h"
+#include "signal.h"
+#include "sys/wait.h"
+#include "sys/types.h"
+#define STACK_SIZE 1024*1024 // 1MB
+
+int childFunc(void *arg) {
+    printf("Hello from child\n");
+    return EXIT_SUCCESS;
+}
+
+int main(int argc, char* const argv[]) {
+
+    char stack[STACK_SIZE];
+
+    pid_t pid = clone(childFunc, stack + STACK_SIZE, CLONE_VM | CLONE_FS | CLONE_FILES | SIGCHLD, NULL);
+
+    printf("Parent running\n");
+    waitpid(pid, NULL, 0);
+
+    return EXIT_SUCCESS;
+}
+```
+* POSIX threads (`pthread_create`) internally call:
+```c
+clone(
+   flags = CLONE_VM | CLONE_FS | CLONE_FILES |
+           CLONE_SIGHAND | CLONE_THREAD
+)
+```
+This makes threads share:
+* memory
+* files
+* signals
+
+
+
+
 ### **kill()**
 
 > In `C`, the `kill()` function is the programmatic way to **send** signals.
@@ -544,3 +713,55 @@ int main() {
 3. **Economy**: cheaper than process creation, thread switching lower overhead than context switching
 4. **Scalability**: process can take advantage of multicore
 architectures
+
+## Unix/Linux Signals
+
+    In Unix/Linux C signal handling, signals are asynchronous notifications sent to a process to notify it about events such as interrupts, illegal operations, termination requests, etc. They are defined in <signal.h>.
+
+### List of Signals (1-31)
+| No | Signal Name | Default Action | Description |
+|-|-|-|-|
+| 1 | SIGHUP | Terminate | Sent when a terminal controlling a process is closed (Hangup). Often used to tell daemons to reload configuration. |
+| 2 | SIGINT | Terminate | Interrupt signal sent when user presses `Ctrl+C` in terminal. Requests program to stop. |
+| 3 | SIGQUIT | Core Dump | Sent by `Ctrl+\`. Terminates process and produces core dump for debugging. |
+| 4 | SIGILL | Core Dump | **Illegal instruction**. Happens when CPU executes invalid machine code. |
+| 5 | SIGTRAP | Core Dump | Trap signal used by debuggers (breakpoints). |
+| 6 | SIGABRT | Core Dump | Abort signal sent by `abort()` function. Indicates abnormal termination. |
+| 7 | SIGBUS | Core Dump | Bus error due to invalid **memory access** (alignment issues or non-existent memory). |
+| 8 | SIGFPE | Core Dump | **Floating point** exception such as divide-by-zero or overflow. |
+| 9 | SIGKILL | Terminate | **Forcefully kills process**. Cannot be caught, ignored, or handled. |
+| 10 | SIGUSR1 | Terminate | **User-defined signal 1**. Used by applications for custom purposes. |
+| 11 | SIGSEGV | Core Dump | **Segmentation fault** due to invalid memory access. |
+| 12 | SIGUSR2 | Terminate | **User-defined signal 2**. Used for application-specific usage. |
+| 13 | SIGPIPE | Terminate | Occurs when writing to a **pipe with no reader.** |
+| 14 | SIGALRM | Terminate | Sent when a timer set by `alarm()` expires. |
+| 15 | SIGTERM | Terminate | Default **termination signal** used by `kill`. Allows program to clean up. |
+| 16 | SIGSTKFLT | Terminate | Stack fault (rarely used on modern systems). |
+| 17 | SIGCHLD | Ignore | Sent to parent when **child process terminates or stops**. |
+| 18 | SIGCONT | Continue | Resumes a process that was stopped. |
+| 19 | SIGSTOP | Stop | **Stops (pauses) process immediately**. Cannot be caught or ignored. |
+| 20 | SIGSTP | Stop | Terminal stop signal from `Ctrl+Z`. Can be caught by program. |
+| 21 | SIGTTIN | Stop | Background process tries to **read from terminal.** |
+| 22 | SIGTTOU | Stop | Background process tries to **write to terminal.** |
+| 23 | SIGURG | Ignore | Urgent condition on **socket** (out-of-band data). |
+| 24 | SIGXCPU | Core Dump | CPU time limit exceeded. |
+| 25 | SIGXFSZ | Core Dump | File size limit exceeded. |
+| 26 | SIGVTALRM | Terminate | Virtual timer expired. |
+| 27 | SIGPROF | Terminate | Profiling timer expired (used by profilers). |
+| 28 | SIGWINCH | Ignore | Window size change in terminal. |
+| 29 | SIGIO | Terminate | I/O now possible (asynchronous I/O). |
+| 30 | SIGPWR | Terminate | Power failure warning. |
+| 31 | SIGSYS | Core Dump | Bad system call (invalid syscall). |
+
+### Signal Default Actions Explained
+| Action | Meaning |
+| - | - |
+| Terminate | Process exits normally |
+| Core Dump | Process terminates and creates memory dump file |
+| Ignore | Process paused until `SIGCONT` |
+| Stop | Signal ignored |
+
+### Signals That Cannot Be Caught or Ignored
+These signals **cannot be handled** by `signal()` or `sigaction()`.
+* **`SIGKILL(9)`** : Force Kill
+* **`SIGSTOP(19)`** : Stop process immediately
